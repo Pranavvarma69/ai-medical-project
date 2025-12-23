@@ -11,6 +11,10 @@ const scanSchema = new mongoose.Schema(
       type: String,
       required: true
     },
+    gradcamUrl: {
+      type: String,
+      required: true
+    },
     predictions: {
       type: Map,
       of: Number, 
@@ -18,6 +22,10 @@ const scanSchema = new mongoose.Schema(
     },
     predictedClass: {
       type: String,
+      required: true
+    },
+    confidence: {
+      type: Number,
       required: true
     }
   },

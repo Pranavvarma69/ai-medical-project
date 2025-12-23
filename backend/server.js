@@ -5,6 +5,7 @@ import cors from "cors";
 
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import scanRoutes from "./routes/scanRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -14,8 +15,8 @@ app.use(express.json());
 
 
 app.use("/api/auth", authRoutes);
-
 app.use("/api/users", userRoutes);
+app.use("/api/scans", scanRoutes);
 
 
 app.get("/", (req, res) => {
@@ -26,8 +27,8 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB connected");
-    app.listen(2000, () => {
-      console.log("Server running on port 2000");
+    app.listen(3000, () => {
+      console.log("Server running on port 3000");
     });
   })
   .catch((err) => {
