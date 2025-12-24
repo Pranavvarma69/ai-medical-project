@@ -7,77 +7,80 @@ import os
 from tensorflow.keras.applications import EfficientNetB3
 from tensorflow.keras import layers, models
 
-
 app = FastAPI()
 
-# -------------------------
-# Load model ONCE
-# -------------------------
-MODEL_PATH = "model/xray_classifier_b3_3class1.keras"
 IMG_SIZE = (300, 300)
-
+CLASS_NAMES = ["COVID", "Normal", "Viral Pneumonia"]
 NUM_CLASSES = 3
 
-base_model = EfficientNetB3(
-    weights=None,
-    include_top=False,
-    input_shape=(300, 300, 3)
-)
+model = None  # 👈 IMPORTANT
 
-model = models.Sequential([
-    base_model,
-    layers.GlobalAveragePooling2D(),
-    layers.BatchNormalization(),
-    layers.Dense(256, activation="relu"),
-    layers.Dropout(0.4),
-    layers.Dense(NUM_CLASSES, activation="softmax")
-])
 
-# IMPORTANT: load weights, not model
-model.load_weights("models/xray_classifier_b3_3class1.keras")
+def load_model():
+    global model
+    if model is not None:
+        return model
 
-print("✅ Model rebuilt and weights loaded")
+    print("🟡 Loading model...")
 
-CLASS_NAMES = ["COVID", "Normal", "Viral Pneumonia"]
+    base_model = EfficientNetB3(
+        weights=None,
+        include_top=False,
+        input_shape=(300, 300, 3)
+    )
 
-# -------------------------
-# Request body schema
-# -------------------------
+    model = models.Sequential([
+        base_model,
+        layers.GlobalAveragePooling2D(),
+        layers.BatchNormalization(),
+        layers.Dense(256, activation="relu"),
+        layers.Dropout(0.4),
+        layers.Dense(NUM_CLASSES, activation="softmax")
+    ])
+
+    model.load_weights("models/xray_classifier_b3_3class1.keras")
+
+    # Warmup
+    model.predict(np.zeros((1, 300, 300, 3)))
+
+    print("✅ Model loaded successfully")
+    return model
+
+
 class PredictRequest(BaseModel):
     image_path: str
 
-# -------------------------
-# Prediction endpoint
-# -------------------------
+
+@app.get("/")
+def health():
+    return {"status": "API running"}
+
+
 @app.post("/predict")
 def predict(req: PredictRequest):
-    image_path = req.image_path
+    print("🟡 Predict request received")
 
-    if not os.path.exists(image_path):
+    model = load_model()
+
+    if not os.path.exists(req.image_path):
         return {"error": "Image not found"}
 
-    # Load image
-    img = cv2.imread(image_path)
+    img = cv2.imread(req.image_path)
+    if img is None:
+        return {"error": "Invalid image"}
+
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, IMG_SIZE)
-    img_norm = img / 255.0
-    input_tensor = np.expand_dims(img_norm, axis=0)
+    img = img / 255.0
+    input_tensor = np.expand_dims(img, axis=0)
 
-    # Predict
     preds = model.predict(input_tensor)[0]
-    pred_index = int(np.argmax(preds))
-    predicted_class = CLASS_NAMES[pred_index]
-    confidence = float(preds[pred_index])
-
-    predictions = {
-        CLASS_NAMES[i]: float(preds[i])
-        for i in range(len(CLASS_NAMES))
-    }
-
-    
+    idx = int(np.argmax(preds))
 
     return {
-        "predictedClass": predicted_class,
-        "confidence": confidence,
-        "predictions": predictions,
+        "predictedClass": CLASS_NAMES[idx],
+        "confidence": float(preds[idx]),
+        "predictions": {
+            CLASS_NAMES[i]: float(preds[i]) for i in range(len(CLASS_NAMES))
+        }
     }
